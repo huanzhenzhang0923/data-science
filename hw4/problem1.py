@@ -1,185 +1,174 @@
-import pandas as pd
+#-------------------------------------------------------------------------
+# Note: please don't use any additional package except the following packages
+import numpy as np
+import math
 #-------------------------------------------------------------------------
 '''
-    Problem 1: Sabermetrics 
-    In this problem, you will implement a version of the baseball player ranking system.
-    You could test the correctness of your code by typing `nosetests test1.py` in the terminal.
+    Problem 1: PCA 
+    In this problem, you will implement a version of the principal component analysis method to reduce the dimensionality of data.
+    You could test the correctness of your code by typing `nosetests -v test1.py` in the terminal.
+
+    Notations:
+            ---------- input data ------------------------
+            n: the number of data instances (for example, # of images), an integer scalar.
+            p: the number of dimensions (for example, # of pixels in each image), an integer scalar.
+            X: the feature matrix, a float numpy matrix of shape n by p. 
+            ---------- computed data ----------------------
+            mu: the average vector of matrix X, a numpy float matrix of shape 1 by p. 
+                Each element mu[0,i] represents the average value in the i-th column of matrix X.
+            Xc: the centered matrix X, a numpy float matrix of shape n by p. 
+                Each column has a zero mean value.
+            C:  the covariance matrix of matrix X, a numpy float matrix of shape p by p. 
+            k:  the number of dimensions to reduce to (k should be smaller than p), an integer scalar
+            E:  the eigen vectors of matrix X, a numpy float matrix of shape p by p. 
+                Each column of E corresponds to an eigen vector of matrix X.
+            v:  the eigen values of matrix X, a numpy float array of length p. 
+                Each element corresponds to an eigen value of matrix X. E and v are paired.
+            Xp: the projected feature matrix with reduced dimensions, a numpy float matrix of shape n by k. 
+             P: the projection matrix, a numpy float matrix of shape p by k. 
+            -----------------------------------------------
 '''
 
 #--------------------------
-def batting_average(H, AB):
+def centering_X(X):
     '''
-        compute the batting average of a player. 
-        For more details, see here https://en.wikipedia.org/wiki/Batting_average.
+        Centering matrix X, so that each column has zero mean.
         Input:
-            H: the number of hits, an integer scalar. 
-            AB: the number of "at bats",  an integer scalar
+            X:  the feature matrix, a float numpy matrix of shape n by p. Here n is the number of data records, p is the number of dimensions.
         Output:
-            BA: the batting average of a player, a float scalar.
+            Xc:  the centered matrix X, a numpy float matrix of shape n by p. 
+            mu:  the average row vector of matrix X, a numpy float matrix of shape 1 by p. 
+        Note: please don't use the np.cov() function. There seems to be a bug in their code which will result in an error in later test cases. 
+              Please implement this function only using basic numpy functions, such as np.mean().
     '''
+
     #########################################
     ## INSERT YOUR CODE HERE
-    BA=H/AB
-
-
+    mu=np.mean(X,axis=0)
+    Xc = X - mu
     #########################################
-    return BA
+    return Xc, mu
 
 
 #--------------------------
-def on_base_percentage(H, AB, BB, HBP, SF):
+def compute_C(Xc):
     '''
-        compute the on base percentage of a player. 
-        For more details, see here https://en.wikipedia.org/wiki/On-base_percentage.
+        Compute the covariance matrix C. 
         Input:
-            H: the number of hits, an integer scalar. 
-            AB: the number of "at bats",  an integer scalar
-            BB: the number of bases on balls (walks),  an integer scalar
-            HBP: the number of hit by pitch,  an integer scalar
-            SF: the number of sacrifice fly,  an integer scalar
+            Xc:  the centered feature matrix, a float numpy matrix of shape n by p. Here n is the number of data records, p is the number of dimensions.
         Output:
-            OBP: the on base percentage of a player, a float scalar.
+            C:  the covariance matrix, a numpy float matrix of shape p by p. 
+        Note: please don't use the np.cov() function here. Implement the function using matrix multiplication.
     '''
+
     #########################################
     ## INSERT YOUR CODE HERE
-    numerator=H+BB+HBP
-    denominator=AB+BB+HBP+SF
-    OBP=numerator/denominator
+    D=1/(len(Xc)-1)*np.dot(Xc.T,Xc)
+    C=(D+D.T)/2
+
+
 
     #########################################
-    return OBP 
-
-#--------------------------
-def slugging_percentage(H, _2B, _3B, HR, AB):
-    '''
-        compute the slugging percentage of a player. 
-        For more details, see here https://en.wikipedia.org/wiki/Slugging_percentage.
-        Input:
-            H: the number of hits, an integer scalar. 
-            _2B: the number of 2nd base,  an integer scalar (note: python variable names cannot start with a number, so _ is added)
-            _3B: the number of 3rd base,  an integer scalar
-            HR: the number of home runs,  an integer scalar
-            AB: the number of at bats,  an integer scalar
-        Output:
-            SLG: the slugging percentage of a player, a float scalar.
-    '''
-    #########################################
-    ## INSERT YOUR CODE HERE
-
-    # compute the total bases
-    total_base=H+_2B+2*_3B+3*HR
-    # compute SLG
-    SLG=total_base/AB
-
-    #########################################
-    return SLG 
+    return C
 
 
 #--------------------------
-def runs_created(H, _2B, _3B, HR, BB, AB):
+def compute_eigen_pairs(C):
     '''
-        compute the expected runs created by a team based upon Bill James' runs created formula. 
-        For more details, see here https://en.wikipedia.org/wiki/Runs_created.
+        Compute the eigen vectors and eigen values of C. 
         Input:
-            H: the number of hits, an integer scalar. 
-            _2B: the number of 2nd base,  an integer scalar (note: python variable names cannot start with a number, so _ is added)
-            _3B: the number of 3rd base,  an integer scalar
-            HR: the number of home runs,  an integer scalar
-            BB: the number of bases on balls (walks),  an integer scalar
-            AB: the number of at bats,  an integer scalar
+            C:  the covariance matrix, a numpy float matrix of shape p by p. 
         Output:
-            RC: the expected runs created/scored by a team, a float scalar.
+            E:  the eigen vectors of matrix C, a numpy float matrix of shape p by p. Each column of E corresponds to an eigen vector of matrix C.
+            v:  the eigen values of matrix C, a numpy float array of length p. Each element corresponds to an eigen value of matrix C. E and v are paired.
+        Hint: you could use np.linalg.eig() to compute the eigen vectors of a matrix. 
     '''
+
     #########################################
     ## INSERT YOUR CODE HERE
+    v,E=np.linalg.eig(C)
+    print(E)
+    #########################################
+    return E,v
 
-    # compute the total bases
-    total_base=H+_2B+2*_3B+3*HR    
-    # compute runs created
-    RC=(H+BB)*total_base/(AB+BB)
+#--------------------------
+def compute_P(E,v,k):
+    '''
+        Compute the projection matrix P by combining the eigen vectors with the top k largest eigen values. 
+        Input:
+            E:  the eigen vectors of matrix X, a numpy float matrix of shape p by p. Each column of E corresponds to an eigen vector of matrix X.
+            v:  the eigen values of matrix X, a numpy float array of length p. Each element corresponds to an eigen value of matrix X. E and v are paired.
+            k:  the number of dimensions to reduce to (k should be smaller than p), an integer scalar
+        Output:
+            P: the projection matrix, a numpy float matrix of shape p by k. 
+    '''
 
     #########################################
-    return RC 
+    ## INSERT YOUR CODE HERE
+    p=len(E)
+    a=np.argsort(v)[::-1]           ##find the index of the top k eigen value
+    P=np.mat(np.zeros([p,k]),dtype=float)       ##define the shape of p
+    for i in range(k):
+        index=a[i]
+        P[:,i]=E[:,index]
+
+    #########################################
+    return P
 
 
 #--------------------------
-def win_ratio(RC, RA):
+def compute_Xp(Xc,P):
     '''
-        compute the expected wining ratio of a team based upon Bill James' Pythagorean expectation. 
-        For more details, see here https://en.wikipedia.org/wiki/Pythagorean_expectation.
+        Compute the projected feature matrix Xp by projecting data Xc using matrix P. 
         Input:
-            RC: the number of runs created/scored, an integer scalar. 
-            RA: the number of runs allowed,  an integer scalar
+            E:  the eigen vectors of matrix X, a numpy float matrix of shape p by p. Each column of E corresponds to an eigen vector of matrix X.
+            v:  the eigen values of matrix X, a numpy float array of length p. Each element corresponds to an eigen value of matrix X. E and v are paired.
+            k:  the number of dimensions to reduce to (k should be smaller than p), an integer scalar
         Output:
-            WR: the projected winning ratio of a team, a float scalar.
+            P: the projection matrix, a numpy float matrix of shape p by k. 
     '''
+
     #########################################
     ## INSERT YOUR CODE HERE
-    WR=1/(1+(RA/RC)**2)
-
-
-    #########################################
-    return WR 
-
-#--------------------------
-def eval_player(ID='hattesc01'):
-    '''
-        compute the BA, OBP and SLG of a player (ID) from the data in "Batting.csv" (year 2001). 
-        This dataset is downloaded from Lahman's baseball database (http://www.seanlahman.com/baseball-archive/statistics/)
-        Input:
-            ID: the player ID of a player, a string.  For example, "hattesc01" is for Scott Hatteberg. You can find the player names and IDs in People.csv.
-        Output:
-            BA: the batting average of a player, a float scalar. 
-            OBP: the on base percentage of a player, a float scalar.
-            SLG: the slugging percentage of a player, a float scalar.
-        Hint: you could use pandas package to load csv file and search player. Here is a tutorial: http://pandas.pydata.org/pandas-docs/stable/10min.html
-    '''
-    #########################################
-    ## INSERT YOUR CODE HERE
-
-    # read Batting.csv 
-    eva= pd.read_csv('Batting.csv',index_col='playerID')
-    # search player by player ID
-    H=eva.loc[ID,'H']
-    AB=eva.loc[ID,'AB']
-    _2B=eva.loc[ID,'2B']
-    _3B=eva.loc[ID,'3B']        ##parameter setting
-    HR=eva.loc[ID,'HR']
-    HBP=eva.loc[ID,'HBP']
-    SF=eva.loc[ID,'SF']
-    BB=eva.loc[ID,'BB']
-    
-    BA=batting_average(H, AB)
-    OBP=on_base_percentage(H, AB, BB, HBP, SF)
-    SLG=slugging_percentage(H, _2B, _3B, HR, AB)
-
+    Xp=np.dot(Xc,P)
 
     #########################################
-    return BA, OBP, SLG 
+    return Xp
 
 
 
 #--------------------------
-def salary(ID='hattesc01'):
+def PCA(X, k=1):
     '''
-        find the salary of a player in "Salaries.csv" (year 2002). 
+        Compute PCA of matrix X. 
         Input:
-            ID: the player ID of a player, a string.  For example, "hattesc01" is for Scott Hatteberg. You can find the player names and IDs in People.csv.
+            X:  the feature matrix, a float numpy matrix of shape n by p. Here n is the number of data records, p is the number of dimensions.
+            k:  the number of dimensions to output (k should be smaller than p)
         Output:
-            S: the salary of a player in year 2002, a float scalar.
-        Hint: you could use pandas package to load csv file and search player. Here is a tutorial: http://pandas.pydata.org/pandas-docs/stable/10min.html
+            Xp: the feature matrix with reduced dimensions, a numpy float matrix of shape n by k. 
+             P: the projection matrix, a numpy float matrix of shape p by k. 
+        Note: in this problem, you cannot use existing package for PCA, such as scikit-learn
     '''
+
     #########################################
     ## INSERT YOUR CODE HERE
 
-    # read Batting.csv 
-    eva= pd.read_csv('Salaries.csv',index_col='playerID')
-    # search player by player ID
-    S=eva.loc[ID,'salary']
+    # centering matrix X 
+    Xc,mu=centering_X(X)
 
+    # compute covariance matrix C
+    C=compute_C(Xc)
+
+    # compute eigen pairs of L
+    E,v=compute_eigen_pairs(C)
+
+    # compute the projection matrix 
+    P=compute_P(E,v,k)
+
+    # project the data into lower dimension using projection matrix P and centered data matrix X
+    Xp=compute_Xp(Xc,P)
 
     #########################################
-    return S 
-
+    return Xp, P 
 
 

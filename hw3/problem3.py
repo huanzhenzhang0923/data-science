@@ -1,73 +1,109 @@
 import numpy as np
 import math
-# Hint: you can reuse the functions that you have implemented in problem 3. For example, p3.reshape_to_image() 
-import problem3 as p3 
-
+import copy
 #-------------------------------------------------------------------------
 '''
-    Problem 4: face recognition 
-    In this problem, you will use PCA to perform face recogition in a face image dataset.
-    We assume you have already passed the unit tests in problem3.py. There will be a file named "face_pca.npy" in your folder.
-    This file contains a numpy matrix of shape (400,20), which is the reduced dimsions for the 400 face images.
-    We will need to use this file in this problem.
-    You could test the correctness of your code by typing `nosetests test4.py` in the terminal.
-
-    Notations:
-            ---------- input data ------------------------
-            n: the number of face images, an integer scalar. (n = 400)
-            p: the number of pixels in each image, an integer scalar. (p= 4096)
-            c: the number of classes (persons), an integer scalar. (c = 40)
-            k: the number of dimensions to reduce to, an integer scalar.
-            Xp: the feature matrix with reduced dimensions, a numpy float matrix of shape n by k. (400 by k) 
-            ----------------------------------------------
+    Problem 3: optimization-based recommender systems (collaborative filtering)
+    In this problem, you will implement a version of the recommender system using optimization-based method.
+    You could test the correctness of your code by typing `nosetests test3.py` in the terminal.
 '''
 
 #--------------------------
-def compute_distance(Xp, q):
+def update_U(R, V, U, beta=.001, mu=1.):
     '''
-        Compute the Euclidean distance between an query image and all the images in an image dataset.  
-        Intput:
-            Xp: the projected feature matrix, a float numpy matrix of shape (400, k). 
-            q:  a projected features of a query face image. a numpy vector of shape (1, k). 
+        Update the matrix U (movie factors) by fixing matrix V using gradient descent. 
+        Input:
+            R: the rating matrix, a float numpy matrix of shape m by n. Here m is the number of movies, n is the number of users.
+                If the rating is unknown, the number is 0. 
+            V: the user factor matrix, a numpy float matrix of shape k X n. Here n is the number of users. 
+            U: the current item (movie) factor matrix, a numpy float matrix of shape m X k. Here m is the number of movies (items).
+            beta: step parameter for gradient descent, a float scalar 
+            mu: the parameter for regularization term, a float scalar 
         Output:
-            d: distances between the query image and all the images in Xp. A numpy vector of shape (400,1), where each element i, is the Euclidean distance between i-th image in X and the query image.
+            U: the updated item (movie) factor matrix, a numpy float matrix of shape m X k. Here m is the number of movies (items).
     '''
+
     #########################################
     ## INSERT YOUR CODE HERE
-    d=np.zeros((len(Xp),))
-    for row in range(len(Xp)):
-        d[row,] = np.linalg.norm(q-Xp[row,:])
 
-
-
-
+    # compute a binary matrix, representing the elements with known rating
+    B=copy.deepcopy(R)
+    for i in range(len(R)):
+        for j in range(len(R.T)):
+            if R[i, j] != 0:
+                B[i, j] = 1
+    # compute the gradient of matrix U 
+    L=(R-np.dot(U,V))*B
+    U1=-2*np.dot(L,V.T)+2*mu*U
+    U=U-beta*U1
     #########################################
-    return d
-
+    return U
 
 #--------------------------
-def face_recognition(Xp,q):
+def update_V(R, U, V, beta=.001, mu=1.):
     '''
-        Compute the most similar faces to the query face (id) from all the images in an image dataset.  
-        We will use one image from olivetti face dataset as the query and search for similar faces to the query.
-        Intput:
-            Xp: the projected feature matrix, a float numpy matrix of shape (400, k). 
-            q:  a projected features of a query face image. a numpy vector of shape (1, k). 
+        Update the matrix V (user factors) by fixing matrix U using gradient descent. 
+        Input:
+            R: the rating matrix, a float numpy matrix of shape m by n. Here m is the number of movies, n is the number of users.
+                If the rating is unknown, the number is 0. 
+            U: the item (movie) factor matrix, a numpy float matrix of shape m X k. Here m is the number of movies (items).
+            V: the current user factor matrix, a numpy float matrix of shape k X n. Here n is the number of users. 
+            beta: step parameter for gradient descent, a float scalar 
+            mu: the parameter for regularization term, a float scalar 
         Output:
-            ids: the ranked ids of similar face images to the query image.
+            V: the updated item (movie) factor matrix, a numpy float matrix of shape m X k. Here m is the number of movies (items).
     '''
     #########################################
     ## INSERT YOUR CODE HERE
-    d=compute_distance(Xp, q)
-    ids=np.argsort(d)
-    ids=ids.astype(int)
 
-
-
+    # compute a binary matrix, representing the elements with known ratings
+    B=copy.deepcopy(R)
+    for i in range(len(R)):
+        for j in range(len(R.T)):
+            if R[i, j] != 0:
+                B[i, j] = 1
+    # compute the gradient of matrix V
+    L=(R-np.dot(U,V))*B
+    V1=-2*np.dot(U.T,L)+2*mu*V
+    # compute the updated matrix U
+    V=V-beta*V1
 
     #########################################
-    return ids
+    return V 
+ 
 
-
+#--------------------------
+def matrix_decoposition(R, k=5, max_steps=1000000, beta=.01, mu=.01):
+    '''
+        Compute the matrix decomposition for optimization-based recommender system.  
+        Input:
+            R: the rating matrix, a float numpy matrix of shape m by n. Here m is the number of movies, n is the number of users.
+                If the rating is unknown, the number is 0. 
+            k: the number of latent factors for users and items.
+            max_steps: the maximium number of steps for gradient descent.
+            beta: step parameter for gradient descent, a float scalar 
+        Output:
+            U: the item (movie) factor matrix, a numpy float matrix of shape m X k. Here m is the number of movies (items).
+            V: the user factor matrix, a numpy float matrix of shape k X n. Here n is the number of users. 
+    '''
+    
+    # initialize U and V with random values
+    n_movies, n_users = R.shape
+    U = np.random.rand(n_movies, k)
+    V = np.random.rand(k, n_users)
+    
+    #########################################
+    ## INSERT YOUR CODE HERE
+    # gradient descent
+    for i in range(max_steps):        
+        # fix U, update V
+        V=update_V(R, U, V, beta=.01, mu=.01)
+        # fix V, update U
+        U=update_U(R, V, U, beta=.01, mu=.01)
+        if np.allclose(np.dot(U,V),R, atol=0.1)==True:
+            break
+      
+    #########################################
+    return U, V 
 
 

@@ -1,249 +1,146 @@
-import math
+#-------------------------------------------------------------------------
+# Note: please don't use any additional package except the following packages
 import numpy as np
-import copy
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+import PIL
+from sklearn.datasets import fetch_olivetti_faces
+# Hint: you can reuse the functions that you have implemented in problem 1. For example, p1.PCA() 
+import problem1 as p1 
 #-------------------------------------------------------------------------
 '''
-    Problem 2: User-based recommender systems
-    In this problem, you will implement a version of the recommender system using user-based method.
-    You could test the correctness of your code by typing `nosetests test2.py` in the terminal.
+    Problem 3: eigen faces 
+    In this problem, you will use PCA to compute eigen faces in a face image dataset.
+    We will use olivetti face image dataset (http://scikit-learn.org/stable/modules/generated/sklearn.datasets.fetch_olivetti_faces.html).
+    It include 400 face images, and 40 human subjects. For each human subject, we have 10 face images.
+    Each face image is a 64 by 64 black-and-white image.
+    You need to install the following package:
+        * sklearn
+        * scipy
+        * pillow
+    You could use `pip install sklearn`                        
+                  `pip install pillow`
+                  `pip install scipy` to install the packages.
+    You could test the correctness of your code by typing `nosetests -v test3.py` in the terminal.
+    Hint: you can reuse the functions that you have implemented in problem 2. For example, p2.PCA() 
+
+    Notations:
+            ---------- input data ------------------------
+            n: the number of face images, an integer scalar. (n = 400)
+            p: the number of pixels in each image, an integer scalar. (p= 4096)
+            c: the number of classes (persons), an integer scalar. (c = 40)
+            h: the height of a face image, an integer scalar. (h = 64)
+            w: the width of a face image, an integer scalar. (w = 64)
+            X: the feature matrix, a float numpy matrix of shape n by p. (400 by 4096)
+            y: labels associated to each face image, a numpy integer matrix of shape (n by 1). (400 by 1)
+               The i-th element can be  0,1,..., or 39 corresponding to the Subject ID of the i-th image. 
+            mu: the average vector of matrix X, a numpy float matrix of shape 1 by p. (1 by 4096)
+                Each element mu[0,i] represents the average value in the i-th column of matrix X.
+            mu_image: the average face image, a numpy float matrix of shape h by w (64 by 64). 
+                      Each element mu[i,j] represents the average value in the ij-th pixel in all face images. 
+            k: the number of dimensions to reduce to, an integer scalar.
+            P_images:  the eigen faces, a python list of length k. 
+                Each element in the list is an eigen face image, which is a numpy float matrix of shape 64 by 64. 
+            Xp: the feature matrix with reduced dimensions, a numpy float matrix of shape n by k. (400 by k) 
 '''
 
 #--------------------------
-def cosine_similarity(RA, RB):
+def reshape_to_image(x):
     '''
-        compute the cosine similarity between user A and user B. 
-        The similarity values between users are measured by observing all the items which have been rated by BOTH users. 
-        If an item is only rated by one user, the item will not be involved in the similarity computation. 
-        You need to first remove all the items that are not rated by both users from RA and RB. 
-        If the two users don't share any item in their ratings, return 0. as the similarity.
-        Then the cosine similarity is < RA, RB> / (|RA|* |RB|). 
-        Here <RA, RB> denotes the dot product of the two vectors (see here https://en.wikipedia.org/wiki/Dot_product). 
-        |RA| denotes the L-2 norm of the vector RA (see here for example: http://mathworld.wolfram.com/L2-Norm.html). 
-        For more details, see here https://en.wikipedia.org/wiki/Cosine_similarity.
+        Reshape a feature vector into a face image 
         Input:
-            RA: the ratings of user A, a float python vector of length m (the number of movies). 
-                If the rating is unknown, the number is 0. For example the vector can be like [0., 0., 2.0, 3.0, 0., 5.0]
-            RB: the ratings of user B, a float python vector
-                If the rating is unknown, the number is 0. For example the vector can be like [0., 0., 2.0, 3.0, 0., 5.0]
+            x:  a feature vector , a float numpy matrix of shape (1, 4096). 
         Output:
-            S: the cosine similarity between users A and B, a float scalar value between -1 and 1.
-        Hint: you could use math.sqrt() to compute the square root of a number
+            image: the face image, a float numpy matrix of shape (64,64). 
+    (5 points)
     '''
     #########################################
     ## INSERT YOUR CODE HERE
-    for i in range(len(RA)):
-        if RA[i]==0 or RB[i]==0:
-            RA[i]=0
-            RB[i]=0
-    P=np.dot(RA,RB)
-    A=np.linalg.norm(RA)
-    B=np.linalg.norm(RB)
-    if A==0 and B==0:
-        S=0
-    else:
-        N=(A*B)
-        S=P/N
-    S=float(S)
+    image=np.reshape(x,(64,64))
+
     #########################################
-    return S 
+    return image
+
+#--------------------------
+def compute_mu_image(X):
+    '''
+        Compute the average face image in the dataset . 
+        Input:
+            X:  the feature matrix, a float numpy matrix of shape (400, 4096). Here 400 is the number of images, 4096 is the number of features.
+        Output:
+            mu_image:  the average face image, a float numpy matrix of shape (64,64). Hint: you could reshape a vector of length 4096 into a matrix of shape 64 X 64
+        Hint: you need first compute the average vector of matrix X. The shape of the average vector is (1 by 4096), then you can reshape the vector into a matrix of shape 64 by 64.
+    '''
+    #########################################
+    ## INSERT YOUR CODE HERE
+    mu=np.mean(X,axis=0)
+    mu_image=reshape_to_image(mu)
+
+
+    #########################################
+    return mu_image
 
 
 #--------------------------
-def find_users(R, i):
+def compute_eigen_faces(X, k=20):
     '''
-        find the all users who have rated the i-th movie.  
+        Compute top k eigen faces of the olivetti face image dataset using PCA.
         Input:
-            R: the rating matrix, a float numpy matrix of shape m by n. Here m is the number of movies, n is the number of users.
-                If a rating is unknown, the number is 0. 
-            i: the index of the i-th movie, an integer python scalar (Note: the index starts from 0)
+            X:  the feature matrix, a float numpy matrix of shape (400, 4096). Here 400 is the number of images, 4096 is the number of features.
+            k:  the number of eigen face to keep. 
         Output:
-            idx: the indices of the users, a python list of integer values 
+            P_images:  the eigen faces, a python list of length k. 
+                Each element in the list is an eigen face image, which is a numpy float matrix of shape 64 by 64. 
+            Xp: the feature matrix with reduced dimensions, a numpy float matrix of shape n by k. (400 by k) 
+        Note: this function may take 1-5 minutes to run, and 1-2GB of memory while running.
     '''
+    
     #########################################
     ## INSERT YOUR CODE HERE
-    idx1,=np.where(R[i]!=0)
-    idx=idx1.tolist()
-    #########################################
-    return idx
+    Xp,P1=p1.PCA(X, k)
+    P_images=[]
+    for i in range(k):
+        P_images.append(P1[:,i].reshape((64,64)))
+    c = P_images[0]
+    print(c)
+    
 
-#--------------------------
-def user_similarity(R, j, idx):
-    '''
-        compute the cosine similarity between a collection of users in idx list and the j-th user.  
-        Input:
-            R: the rating matrix, a float numpy matrix of shape m by n. Here m is the number of movies, n is the number of users.
-                If a rating is unknown, the number is 0. 
-            j: the index of the j-th user, an integer python scalar (Note: the index starts from 0)
-            idx: a list of user indices, a python list of integer values 
-        Output:
-            sim: the similarity between any user in idx list and user j, a python list of float values. It has the same length as idx.
-    '''
-    #########################################
-    ## INSERT YOUR CODE HERE
-    sim=[]
-    RA=R[:,j]
-    for col in idx:
-        RB=R[:,col]
-        RA=copy.deepcopy(R[:,j])
-        sim.append(cosine_similarity(RA, RB))
+
+
 
 
     #########################################
-    return sim 
-
-
-#--------------------------
-def user_based_prediction(R, i_movie, j_user, K=5):
-    '''
-        Compute a prediction of the rating of the j-th user on the i-th movie using user-based approach.  
-        First we take all the users who have rated the i-th movie, and compute their similarities to the target user j. 
-        If there is no user who has rated the i-th movie, predict 3.0 as the default rating.
-        From these users, we pick top K similar users. 
-        If there are less than K users who has rated the i-th movie, use all these users.
-        We weight the user's ratings on i-th movie by the similarity between that user and the target user. 
-        Finally, we rescale the prediction by the sum of similarities to get a reasonable value for the predicted rating.
-        Input:
-            R: the rating matrix, a float numpy matrix of shape m by n. Here m is the number of movies, n is the number of users.
-                If the rating is unknown, the number is 0. 
-            i_movie: the index of the i-th movie, an integer python scalar
-            j_user: the index of the j-th user, an integer python scalar
-            K: the number of similar users to compute the weighted average rating.
-        Output:
-            p: the predicted rating of user j on movie i, a float scalar value between 1. and 5.
-    '''
-    #########################################
-    ## INSERT YOUR CODE HERE
-
-    # find all other users who have rated movie i.
-    idx_1=find_users(R, i_movie)
-    if idx_1.count(0)==len(idx_1):
-        p=3.0
-    else:
-        if len(idx_1)<K:
-            K=len(idx_1)
-        viewer=R[i_movie,idx_1]
-        M=copy.deepcopy(R)
-        sim_1=user_similarity(M, j_user, idx_1)
-        topK=np.argsort(sim_1)[::-1][0:K]
-        weight=[]
-        for i in range(K):
-            weight.append(sim_1[topK[i]])
-        p=np.average(viewer[topK],weights=weight)
-        
-
-    #########################################
-    return p 
-
-
-#--------------------------
-def compute_RMSE(ratings_pred, ratings_real):
-    '''
-        Compute the root of mean square error of the rating prediction.
-        Input:
-            ratings_pred: predicted ratings, a float python list
-            ratings_real: real ratings, a float python list
-        Output:
-            RMSE: the root of mean squared error of the predicted rating, a float scalar.
-    '''
-    #########################################
-    ## INSERT YOUR CODE HERE
-    A=np.array(ratings_pred)
-    B=np.array(ratings_real)
-    C=(A-B)**2
-    s=sum(C)
-    RMSE=np.sqrt(s/len(A))
-    RMSE=float(RMSE)
-    #########################################
-    return RMSE
+    return P_images, Xp
 
 
 
 #--------------------------
-def load_rating_matrix(filename = 'movielens_train.csv'):
+def load_dataset():
     '''
-        Load the rating matrix from a CSV file.  In the CSV file, each line represents (user id, movie id, rating).
-        Note the ids start from 1 in this dataset.
-        Input:
-            filename: the file name of a CSV file, a string
+        Load (or download if not exist) the olivetti face image dataset (http://scikit-learn.org/stable/modules/generated/sklearn.datasets.fetch_olivetti_faces.html).
         Output:
-            R: the rating matrix, a float numpy array of shape m by n. Here m is the number of movies, n is the number of users.
+            X: the feature matrix, a float numpy matrix of shape n by p. (400 by 4096)
+            y: labels associated to each face image, a numpy integer matrix of shape (n by 1). (400 by 1)
+               The i-th element can be  0,1,..., or 39 corresponding to the Subject ID of the i-th image. 
+            images: numpy array of shape (400, 64, 64). Each face image is a (64, 64) matrix, and we have 400 images in the dataset.
+        Hint: you could use fetch_olivetti_faces() function in sklearn package to download the dataset
     '''
     #########################################
     ## INSERT YOUR CODE HERE
-    A= np.loadtxt(open('movielens_train.csv','rb'),delimiter=",")
-    u=np.array(A[:,0])-1
-    u_ids=u.astype(np.int32)
-    m=np.array(A[:,1])-1
-    m_ids=m.astype(np.int32)
-    ratings=A[:,2]
-    col=max(u_ids)+1
-    row=max(m_ids)+1
-    R=np.zeros((row,col))
-    for i in range(len(u_ids)):
-        R[m_ids[i],u_ids[i]]=ratings[i]        
-    #######################################
-    return R
 
+    # download (or load local copy of) the olivetti face image dataset
+    dataset=fetch_olivetti_faces()
 
-#--------------------------
-def load_test_data(filename = 'movielens_test.csv'):
-    '''
-        Load the test data from a CSV file.  In the CSV file, each line represents (user id, movie id, rating).
-        Note the ids in the CSV file start from 1. But the indices in u_ids and m_ids start from 0.
-        Input:
-            filename: the file name of a CSV file, a string
-        Output:
-            m_ids: the list of movie ids, an integer python list of length n. Here n is the number of lines in the test file. (Note indice should start from 0)
-            u_ids: the list of user ids, an integer python list of length n. 
-            ratings: the list of ratings, a float python list of length n. 
-    '''
+    # the images
+    images=dataset.images
+
+    # the label to predict is the id of the person
+    y=dataset.target
+    y=np.reshape(y,(400,1))
+    y= np.asmatrix(y)
+    X=dataset.data
+    X = np.asmatrix(X)
     #########################################
-    ## INSERT YOUR CODE HERE
-    A= np.loadtxt(open('movielens_test.csv','rb'),delimiter=",")
-    u=np.array(A[:,0])-1
-    u_ids=u.tolist()
-    m=np.array(A[:,1])-1
-    m_ids=m.tolist()
-    ratings=A[:,2].tolist()
-    u_ids=list(map(int,u_ids))
-    m_ids=list(map(int,m_ids))
-    ratings=list(map(float,ratings))
-    #########################################
-    return m_ids, u_ids, ratings
-
-
-#--------------------------
-def movielens_user_based(train_file='movielens_train.csv', test_file ='movielens_test.csv', K = 5):
-    '''
-        Compute movie ratings in movielens dataset. Based upon the training ratings, predict all values in test pairs (movie-user pair).
-        In the training file, each line represents (user id, movie id, rating).
-        Note the ids start from 1 in this dataset.
-        Input:
-            train_file: the train file of the dataset, a string.
-            test_file: the test file of the dataset, a string.
-            K: the number of similar users to compute the weighted average rating.
-        Output:
-            RMSE: the root of mean squared error of the predicted rating, a float scalar.
-    Note: this function may take 1-5 minutes to run.
-    '''
-   
-    # load training set
-    R = load_rating_matrix(train_file)
-
-    # load test set
-    m_ids, u_ids,ratings_real = load_test_data(test_file)
-
-    # predict on test set
-    #########################################
-    ## INSERT YOUR CODE HERE
-    ratings_pred=[]
-    for i in range(len(m_ids)):
-        ratings_pred.append(user_based_prediction(R, m_ids[i], u_ids[i],K))
-         
-            
-    #########################################
-    # compute RMSE 
-    RMSE = compute_RMSE(ratings_pred,ratings_real)
-    return  RMSE 
+    return X, y, images 
 
 
